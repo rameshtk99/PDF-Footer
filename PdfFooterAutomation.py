@@ -6,9 +6,11 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
 import tkinter.font as tkFont
 import threading
+import tempfile
 
 # Font mapping from Tkinter names to ReportLab names
 FONT_MAPPING = {
@@ -108,6 +110,9 @@ class FooterApp:
         root.title("PDF Footer Automation")
         root.geometry("800x600")
 
+        # Get draft file path in user's temp directory
+        self.draft_file_path = os.path.join(tempfile.gettempdir(), "pdf_footer_draft.json")
+        
         # Get available system fonts for Tkinter
         self.available_fonts = list(tkFont.families())
         
@@ -202,16 +207,17 @@ class FooterApp:
             "footers": [(l1.get(), l2.get()) for l1, l2 in self.footer_entries]
         }
         try:
-            with open("footer_draft.json", "w", encoding="utf-8") as f:
+            with open(self.draft_file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            messagebox.showerror("Error", f"Could not save draft: {e}")
+            # Don't show error for draft saving - it's not critical
+            print(f"Could not save draft: {e}")
 
     def load_draft(self, auto=False):
         try:
-            if not os.path.exists("footer_draft.json"):
+            if not os.path.exists(self.draft_file_path):
                 return
-            with open("footer_draft.json", "r", encoding="utf-8") as f:
+            with open(self.draft_file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.src_var.set(data.get("src",""))
             self.col_count_var.set(data.get("columns",5))
@@ -231,8 +237,9 @@ class FooterApp:
             if not auto:
                 messagebox.showinfo("Draft Loaded","Footer draft loaded successfully!")
         except Exception as e:
+            # Don't show error for draft loading - it's not critical
             if not auto:
-                messagebox.showerror("Error",f"Could not load draft: {e}")
+                print(f"Could not load draft: {e}")
 
     def set_ui_state(self, enabled):
         """Enable or disable UI elements during processing"""
@@ -259,8 +266,11 @@ class FooterApp:
             if temp_pdf and os.path.exists(temp_pdf):
                 os.remove(temp_pdf)
 
-            # save draft after success
-            self.save_draft()
+            # save draft after success (silently - don't show errors)
+            try:
+                self.save_draft()
+            except:
+                pass  # Silently ignore draft saving errors
             
             # Show success message in main thread
             self.root.after(0, lambda: messagebox.showinfo("Success", f"Footer added successfully!\nOutput: {dest}"))
@@ -300,7 +310,7 @@ class FooterApp:
             return
 
         # Change button to "Wait..." and disable UI
-        self.run_button.config(text="wait...", bg="gray", fg="white", font=("Arial", 10, "bold italic"), state="disabled" )
+        self.run_button.config(text="Wait...", bg="gray", state="disabled")
         self.set_ui_state(False)
         
         # Process in a separate thread to keep UI responsive
